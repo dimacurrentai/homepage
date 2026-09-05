@@ -144,7 +144,7 @@ test('OAuth-only client gets a protected profile without an ID token', async t =
   assert.equal((await fetch(`${service.origin}/api/identity`)).status, 401);
 });
 
-test('xmemory uses its exact callback and Basic authentication without requiring PKCE from the confidential client', async t => {
+test('xmemory uses its exact callback, Basic authentication and S256 PKCE; wrong verifiers and replay are rejected', async t => {
   const { page } = await browserSession(t);
   const client = service.clients.find(item => item.client_id === 'xmemory');
   assert.equal(client.application_type, 'web');
@@ -152,7 +152,8 @@ test('xmemory uses its exact callback and Basic authentication without requiring
   // Intercept the relying party: no test request or authorization code leaves the fixture.
   await page.route(`${callbackUri}?*`, route => route.fulfill({ contentType: 'text/html', body: 'Callback received.' }));
   await googleLogin(page);
-  const params = new URLSearchParams({ client_id: 'xmemory', redirect_uri: callbackUri, response_type: 'code', scope: 'openid email profile', state: 'xmemory-state', nonce: 'xmemory-nonce' });
+  const verifier = oidc.randomPKCECodeVerifier();
+  const params = new URLSearchParams({ client_id: 'xmemory', redirect_uri: callbackUri, response_type: 'code', scope: 'openid email profile', state: 'xmemory-state', nonce: 'xmemory-nonce', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256' });
   await page.goto(`${service.origin}/oauth/authorize?${params}`);
   await approve(page);
   const callback = new URL(page.url());
@@ -160,7 +161,7 @@ test('xmemory uses its exact callback and Basic authentication without requiring
   assert.equal(callback.searchParams.get('state'), 'xmemory-state');
   const code = callback.searchParams.get('code');
   assert.ok(code);
-  const body = { grant_type: 'authorization_code', code, redirect_uri: callbackUri };
+  const body = { grant_type: 'authorization_code', code, redirect_uri: callbackUri, code_verifier: verifier };
   const rejected = await token({ ...client, client_secret: 'wrong-secret' }, body);
   assert.equal(rejected.status, 401);
   const response = await token(client, body);
@@ -173,6 +174,21 @@ test('xmemory uses its exact callback and Basic authentication without requiring
   assert.equal(userinfo.sub, payload.sub);
   assert.equal(userinfo.email, 'demo@example.com');
   assert.equal(userinfo.email_verified, true);
+  const replay = await token(client, body);
+  assert.equal(replay.status, 400);
+  assert.equal((await replay.json()).error, 'invalid_grant');
+  for (const wrongVerifier of [oidc.randomPKCECodeVerifier(), undefined]) {
+    await page.goto(`${service.origin}/oauth/authorize?${params}`);
+    await approve(page);
+    const freshCode = new URL(page.url()).searchParams.get('code');
+    assert.ok(freshCode);
+    const request = { ...body, code: freshCode };
+    if (wrongVerifier) request.code_verifier = wrongVerifier;
+    else delete request.code_verifier;
+    const invalid = await token(client, request);
+    assert.equal(invalid.status, 400);
+    assert.equal((await invalid.json()).error, 'invalid_grant');
+  }
   for (const uri of [`${callbackUri}/`, 'https://wrong.example/console/login/sso/callback']) {
     params.set('redirect_uri', uri);
     const invalid = await fetch(`${service.origin}/oauth/authorize?${params}`, { redirect: 'manual' });
