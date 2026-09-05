@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import Provider from 'oidc-provider';
 import { generateKeyPair, exportJWK } from 'jose';
 import { memoryAdapter, random } from './memory.js';
+import { escape, page } from './views.js';
 
 export async function createProvider(settings, accounts) {
   let jwks;
@@ -21,15 +22,17 @@ export async function createProvider(settings, accounts) {
   const registrationToken = settings.registrationToken || random();
   const provider = new Provider(settings.currentOrigin, {
     adapter: memoryAdapter(), clients, jwks,
-    cookies: { keys: [random()], short: { sameSite: 'lax' }, long: { sameSite: 'lax' } },
+    cookies: { keys: [random()], short: { sameSite: 'lax' }, long: { sameSite: 'none' } },
     claims: { openid: ['sub'], profile: ['name', 'current_id'], email: ['email', 'email_verified'] },
     scopes: ['openid', 'profile', 'email', 'offline_access'],
     subjectTypes: ['public'],
     // A complete authorization-code provider. Implicit/hybrid profiles are not advertised.
     responseTypes: ['code'],
+    enableHttpPostMethods: true,
     features: {
       devInteractions: { enabled: false },
       registration: { enabled: true, initialAccessToken: registrationToken },
+      registrationManagement: { enabled: true },
       revocation: { enabled: true, allowedPolicy: (_ctx, client, token) => token.clientId === client.clientId },
       introspection: { enabled: true, allowedPolicy: (_ctx, client, token) => token.clientId === client.clientId },
       claimsParameter: { enabled: true },
@@ -54,8 +57,7 @@ export async function createProvider(settings, accounts) {
     },
     renderError: async (ctx, out) => {
       ctx.type = 'html';
-      // Error descriptions can contain caller-controlled strings. Keep this page static.
-      ctx.body = '<!doctype html><title>Sign-in could not continue</title><h1>Sign-in could not continue</h1><p>The request is invalid or has expired. Return to the service and start again.</p><a href="/">Current demos</a>';
+      ctx.body = page('Sign-in could not continue', `<h1>Sign-in could not continue.</h1><p>${escape(out.error)}: ${escape(out.error_description)}</p><p>Return to the service and start again.</p><a href="/">Current demos</a>`);
     },
   });
   provider.proxy = true;

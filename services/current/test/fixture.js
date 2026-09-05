@@ -63,8 +63,11 @@ export async function fixture() {
   const settings = {
     development: true, currentOrigin: origin, dimaOrigin: `http://localhost:${port}`,
     googleIssuer: upstream.origin, googleId: 'test-google', googleSecret: 'test-secret', registrationToken: random(),
+    githubId: 'test-github', githubSecret: 'github-secret',
   };
-  const service = await createApp(settings);
+  let service;
+  try { service = await createApp(settings); }
+  catch (error) { await host.close(); await upstream.close(); throw error; }
   host.server.on('request', service.app);
   return { ...service, origin, settings, control, close: async () => { await host.close(); await upstream.close(); } };
 }

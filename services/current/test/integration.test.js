@@ -43,10 +43,14 @@ async function register(overrides = {}) {
   assert.equal(response.status, 201, await response.clone().text());
   return response.json();
 }
-async function authorization(page, client, extra = {}) {
+async function authorization(page, client, extra = {}, method = 'GET') {
   const verifier = oidc.randomPKCECodeVerifier();
   const params = new URLSearchParams({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], response_type: 'code', scope: 'openid profile email offline_access', prompt: 'consent', state: 'test-state', nonce: 'test-nonce', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256', ...extra });
-  await page.goto(`${service.origin}/oauth/authorize?${params}`);
+  if (method === 'POST') {
+    const initial = await page.request.post(`${service.origin}/oauth/authorize`, { form: Object.fromEntries(params), maxRedirects: 0 });
+    assert.ok([302, 303].includes(initial.status()));
+    await page.goto(new URL(initial.headers().location, service.origin).href);
+  } else await page.goto(`${service.origin}/oauth/authorize?${params}`);
   await approve(page);
   const callback = new URL(page.url());
   assert.equal(callback.pathname, '/test-callback', await page.locator('body').textContent());
@@ -94,6 +98,38 @@ test('OIDC client completes discovery, consent, signature verification and UserI
   assert.ok(cookies.some(c => c.name === 'current-demo' && c.domain === '127.0.0.1' && c.httpOnly));
 });
 
+test('GitHub exchanges a browser-bound PKCE code for a profile without creating a Current account', async t => {
+  const { page } = await browserSession(t);
+  const response = await page.request.get(`${service.origin}/auth/github`, { maxRedirects: 0 });
+  const start = new URL(response.headers().location);
+  assert.equal(start.origin, 'https://github.com');
+  assert.equal(start.searchParams.get('scope'), 'read:user');
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    if (String(input) === 'https://github.com/login/oauth/access_token') {
+      const body = new URLSearchParams(init.body);
+      assert.equal(body.get('client_id'), 'test-github');
+      assert.equal(body.get('client_secret'), 'github-secret');
+      assert.equal(body.get('redirect_uri'), `${service.origin}/auth/github/callback`);
+      assert.equal(await oidc.calculatePKCECodeChallenge(body.get('code_verifier')), start.searchParams.get('code_challenge'));
+      return Response.json({ access_token: 'github-test-token', token_type: 'bearer', scope: 'read:user' });
+    }
+    if (String(input) === 'https://api.github.com/user') {
+      assert.equal(new Headers(init.headers).get('authorization'), 'Bearer github-test-token');
+      return Response.json({ id: 12345, login: 'demo-person', name: 'Demo Person' });
+    }
+    return realFetch(input, init);
+  };
+  try {
+    await page.goto(`${service.origin}/auth/github/callback?code=test-code&state=${start.searchParams.get('state')}`);
+    await page.waitForURL(`${service.origin}/account`);
+    const result = JSON.parse(await page.locator('pre').textContent());
+    assert.equal(result.type, 'github');
+    assert.equal(result.profile.login, 'demo-person');
+    assert.equal((await (await page.request.get(`${service.origin}/api/session`)).json()).account, null);
+  } finally { globalThis.fetch = realFetch; }
+});
+
 test('OAuth-only client gets a protected profile without an ID token', async t => {
   const { page } = await browserSession(t);
   await googleLogin(page);
@@ -107,11 +143,25 @@ test('OAuth-only client gets a protected profile without an ID token', async t =
   assert.equal((await fetch(`${service.origin}/api/identity`)).status, 401);
 });
 
+test('sign-out clears the local account and the Current provider SSO session', async t => {
+  const { page } = await browserSession(t);
+  await googleLogin(page);
+  await page.goto(`${service.origin}/demo/oidc`);
+  await approve(page);
+  await page.getByRole('button', { name: 'Sign out of Current' }).click();
+  await page.getByRole('button', { name: 'Yes, sign me out' }).click();
+  assert.equal((await (await page.request.get(`${service.origin}/api/session`)).json()).account, null);
+  const client = service.clients.find(c => c.client_id === 'current-oidc-demo');
+  const params = new URLSearchParams({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], response_type: 'code', scope: 'openid', prompt: 'none' });
+  const response = await page.request.get(`${service.origin}/oauth/authorize?${params}`, { maxRedirects: 0 });
+  assert.equal(new URL(response.headers().location).searchParams.get('error'), 'login_required');
+});
+
 test('authorization code, independent JWKS verification, refresh rotation, introspection, revocation and replay rejection', async t => {
   const { page } = await browserSession(t);
   await googleLogin(page);
   const client = await register();
-  const grant = await authorization(page, client);
+  const grant = await authorization(page, client, {}, 'POST');
   const request = { grant_type: 'authorization_code', code: grant.code, redirect_uri: client.redirect_uris[0], code_verifier: grant.verifier };
   const response = await token(client, request);
   assert.equal(response.status, 200, await response.clone().text());
@@ -134,6 +184,11 @@ test('authorization code, independent JWKS verification, refresh rotation, intro
   assert.equal(revoked.status, 200);
   assert.equal((await introspect(fresh.access_token)).active, false);
   assert.equal((await token(client, request)).status, 400);
+  const deletion = await fetch(client.registration_client_uri, {
+    method: 'DELETE', headers: { Authorization: `Bearer ${client.registration_access_token}` },
+  });
+  assert.equal(deletion.status, 204);
+  assert.equal((await token(client, { grant_type: 'refresh_token', refresh_token: fresh.refresh_token })).status, 401);
 });
 
 test('wrong PKCE, redirect URI, unauthenticated registration and prompt=none are rejected', async t => {
