@@ -42,7 +42,7 @@ sudo systemctl restart website.service
 
 Certbot renews into `/etc/letsencrypt` and its hook restarts the service, but nothing refreshes the `~/.ssl` copies: repeat the copy after a renewal, for `dima.ai` as well.
 
-`https://current.ai` serves a landing page pointing at https://github.com/c5t/current that moves on to https://dima.ai after three seconds; every path gets that page. Plain HTTP redirects to HTTPS, and `www.current.ai` (or any other subdomain) redirects to `current.ai`, keeping the path. `zoom.dima.ai` redirects to Zoom on both listeners. The hostname the caller asked for decides.
+`https://current.ai` serves the OAuth, OpenID Connect, and MCP playground through the loopback demos service. `https://dima.ai/current-demo` demonstrates signing in through Current. See [the demos setup and deployment guide](services/current/README.md), including Google Console configuration. Plain HTTP redirects to HTTPS, and `www.current.ai` (or any other subdomain) redirects to `current.ai`, keeping the path. ACME challenges still reach the certificate webroot. `zoom.dima.ai` redirects to Zoom on both listeners.
 
 ## Setup
 
