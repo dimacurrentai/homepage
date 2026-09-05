@@ -7,6 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { fixture } from './fixture.js';
 import { Accounts, Memory, memoryAdapter } from '../src/memory.js';
+import { createProvider } from '../src/provider.js';
 
 let service, browser;
 before(async () => {
@@ -141,6 +142,52 @@ test('OAuth-only client gets a protected profile without an ID token', async t =
   assert.equal(result.claims, null);
   assert.match(result.profile.current_id, /^\d{6}$/);
   assert.equal((await fetch(`${service.origin}/api/identity`)).status, 401);
+});
+
+test('xmemory uses its exact callback and Basic authentication without requiring PKCE from the confidential client', async t => {
+  const { page } = await browserSession(t);
+  const client = service.clients.find(item => item.client_id === 'xmemory');
+  assert.equal(client.application_type, 'web');
+  const callbackUri = 'https://dk.xmemory.ai/console/login/sso/callback';
+  // Intercept the relying party: no test request or authorization code leaves the fixture.
+  await page.route(`${callbackUri}?*`, route => route.fulfill({ contentType: 'text/html', body: 'Callback received.' }));
+  await googleLogin(page);
+  const params = new URLSearchParams({ client_id: 'xmemory', redirect_uri: callbackUri, response_type: 'code', scope: 'openid email profile', state: 'xmemory-state', nonce: 'xmemory-nonce' });
+  await page.goto(`${service.origin}/oauth/authorize?${params}`);
+  await approve(page);
+  const callback = new URL(page.url());
+  assert.equal(callback.origin + callback.pathname, callbackUri);
+  assert.equal(callback.searchParams.get('state'), 'xmemory-state');
+  const code = callback.searchParams.get('code');
+  assert.ok(code);
+  const body = { grant_type: 'authorization_code', code, redirect_uri: callbackUri };
+  const rejected = await token({ ...client, client_secret: 'wrong-secret' }, body);
+  assert.equal(rejected.status, 401);
+  const response = await token(client, body);
+  assert.equal(response.status, 200);
+  const tokens = await response.json();
+  const jwks = await (await fetch(`${service.origin}/oauth/jwks`)).json();
+  const { payload } = await jwtVerify(tokens.id_token, createLocalJWKSet(jwks), { issuer: service.origin, audience: 'xmemory' });
+  assert.equal(payload.nonce, 'xmemory-nonce');
+  const userinfo = await (await fetch(`${service.origin}/oauth/userinfo`, { headers: { Authorization: `Bearer ${tokens.access_token}` } })).json();
+  assert.equal(userinfo.sub, payload.sub);
+  assert.equal(userinfo.email, 'demo@example.com');
+  assert.equal(userinfo.email_verified, true);
+  for (const uri of [`${callbackUri}/`, 'https://wrong.example/console/login/sso/callback']) {
+    params.set('redirect_uri', uri);
+    const invalid = await fetch(`${service.origin}/oauth/authorize?${params}`, { redirect: 'manual' });
+    assert.equal(invalid.status, 400);
+    assert.equal(invalid.headers.get('location'), null);
+  }
+});
+
+test('xmemory registration is restored with stable credentials and is disabled without its secret', async () => {
+  const restored = await createProvider(service.settings, new Accounts());
+  const client = await restored.provider.Client.find('xmemory');
+  assert.equal(client.clientSecret, service.settings.xmemoryClientSecret);
+  assert.equal(client.tokenEndpointAuthMethod, 'client_secret_basic');
+  const disabled = await createProvider({ ...service.settings, xmemoryClientSecret: undefined }, new Accounts());
+  assert.equal(await disabled.provider.Client.find('xmemory'), undefined);
 });
 
 test('sign-out clears the local account and the Current provider SSO session', async t => {

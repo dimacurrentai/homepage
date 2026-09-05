@@ -14,6 +14,7 @@ const settings = {
   enterpriseId: process.env.ENTERPRISE_OIDC_CLIENT_ID, enterpriseSecret: process.env.ENTERPRISE_OIDC_CLIENT_SECRET,
   jwksFile: process.env.CURRENT_JWKS_FILE,
   registrationToken: process.env.CURRENT_REGISTRATION_TOKEN,
+  xmemoryClientSecret: process.env.XMEMORY_CLIENT_SECRET,
 };
 const { app } = await createApp(settings);
 const server = app.listen(port, '127.0.0.1', () => console.log(`Current demos listening on 127.0.0.1:${port}`));
