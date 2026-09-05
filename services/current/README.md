@@ -39,9 +39,9 @@ Official references: [Google](https://developers.google.com/identity/openid-conn
 
 ## Endpoints and state
 
-The configured `xmemory` web client is restored on startup when `XMEMORY_CLIENT_SECRET` is set in the private service environment. Its exact callback is `https://dk.xmemory.ai/console/login/sso/callback`; it uses `client_secret_basic` and authorization code flow (refresh tokens are also supported). The secret stays stable across deployments and must never be committed. Browser accounts, grants, and sessions remain temporary.
+Persistent clients are loaded from the private JSON file named by `CURRENT_CLIENTS_FILE`. It contains an array of standard OIDC client registrations, including each client's ID, secret, exact `redirect_uris` allowlist, grant types, and token authentication method. Keep this file outside Git with mode `0600`; credentials survive deployments and restarts. Without it, only the built-in demo clients are configured. Browser-created registrations remain temporary.
 
-On the xmemory side, configure `OIDC_ISSUER=https://current.ai`, `OIDC_CLIENT_ID=xmemory`, the matching `OIDC_CLIENT_SECRET`, and optionally `OIDC_DISPLAY_NAME=Sign in with Current`. Request `openid email profile`. The public discovery URL is `https://current.ai/.well-known/openid-configuration`. Provisioning the Current client does not enable SSO or change user-admission rules in xmemory itself.
+This repository treats external services as opaque OAuth/OIDC clients. Their implementation, configuration, admission rules, and deployment belong elsewhere.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -61,7 +61,7 @@ On the xmemory side, configure `OIDC_ISSUER=https://current.ai`, `OIDC_CLIENT_ID
 
 MCP tools: `assign_color({"name":"Ada"})` and `latest_colors({})`. Resource: `current://colors/latest`. GET and DELETE on `/mcp` return 405, as permitted for a stateless JSON-response transport. Notifications return 202. The browser uses the same MCP wire protocol as an external client. Names are bounded to 60 printable characters and rendered as text. Foreign browser origins are rejected; native MCP clients require no auth or Origin header.
 
-Accounts, six-digit IDs, grants, browser-registered clients, sessions, and colors are **in memory**. Accounts remain until restart; browser sessions, grants, and refresh tokens expire after one hour. Access/ID tokens last ten minutes, codes one minute, pending sign-ins ten minutes, and browser-registered clients 24 hours. The configured xmemory client is restored from its private environment secret after restart. Storage has hard capacity limits and expirations. A random opaque `sub` prevents recycled six-digit IDs from identifying another account after restart. Integrations must use `sub`, not `current_id`, as their identity key. The durable signing key contains no user data.
+Accounts, six-digit IDs, grants, browser-registered clients, sessions, and colors are **in memory**. Accounts remain until restart; browser sessions, grants, and refresh tokens expire after one hour. Access/ID tokens last ten minutes, codes one minute, pending sign-ins ten minutes, and browser-registered clients 24 hours. Configured client registrations are restored from the private clients file after restart. Storage has hard capacity limits and expirations. A random opaque `sub` prevents recycled six-digit IDs from identifying another account after restart. Integrations must use `sub`, not `current_id`, as their identity key. The durable signing key contains no user data.
 
 Authorization accepts both GET and POST. Dynamic client management supports authenticated read, update, and deletion.
 

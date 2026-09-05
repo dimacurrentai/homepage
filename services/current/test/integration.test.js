@@ -144,21 +144,21 @@ test('OAuth-only client gets a protected profile without an ID token', async t =
   assert.equal((await fetch(`${service.origin}/api/identity`)).status, 401);
 });
 
-test('xmemory uses its exact callback, Basic authentication and S256 PKCE; wrong verifiers and replay are rejected', async t => {
+test('a registered service uses its exact callback, Basic authentication and S256 PKCE; wrong verifiers and replay are rejected', async t => {
   const { page } = await browserSession(t);
-  const client = service.clients.find(item => item.client_id === 'xmemory');
+  const client = service.clients.find(item => item.client_id === 'external-test-client');
   assert.equal(client.application_type, 'web');
-  const callbackUri = 'https://dk.xmemory.ai/console/login/sso/callback';
+  const callbackUri = client.redirect_uris[0];
   // Intercept the relying party: no test request or authorization code leaves the fixture.
   await page.route(`${callbackUri}?*`, route => route.fulfill({ contentType: 'text/html', body: 'Callback received.' }));
   await googleLogin(page);
   const verifier = oidc.randomPKCECodeVerifier();
-  const params = new URLSearchParams({ client_id: 'xmemory', redirect_uri: callbackUri, response_type: 'code', scope: 'openid email profile', state: 'xmemory-state', nonce: 'xmemory-nonce', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256' });
+  const params = new URLSearchParams({ client_id: 'external-test-client', redirect_uri: callbackUri, response_type: 'code', scope: 'openid email profile', state: 'external-state', nonce: 'external-nonce', code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256' });
   await page.goto(`${service.origin}/oauth/authorize?${params}`);
   await approve(page);
   const callback = new URL(page.url());
   assert.equal(callback.origin + callback.pathname, callbackUri);
-  assert.equal(callback.searchParams.get('state'), 'xmemory-state');
+  assert.equal(callback.searchParams.get('state'), 'external-state');
   const code = callback.searchParams.get('code');
   assert.ok(code);
   const body = { grant_type: 'authorization_code', code, redirect_uri: callbackUri, code_verifier: verifier };
@@ -168,8 +168,8 @@ test('xmemory uses its exact callback, Basic authentication and S256 PKCE; wrong
   assert.equal(response.status, 200);
   const tokens = await response.json();
   const jwks = await (await fetch(`${service.origin}/oauth/jwks`)).json();
-  const { payload } = await jwtVerify(tokens.id_token, createLocalJWKSet(jwks), { issuer: service.origin, audience: 'xmemory' });
-  assert.equal(payload.nonce, 'xmemory-nonce');
+  const { payload } = await jwtVerify(tokens.id_token, createLocalJWKSet(jwks), { issuer: service.origin, audience: 'external-test-client' });
+  assert.equal(payload.nonce, 'external-nonce');
   const userinfo = await (await fetch(`${service.origin}/oauth/userinfo`, { headers: { Authorization: `Bearer ${tokens.access_token}` } })).json();
   assert.equal(userinfo.sub, payload.sub);
   assert.equal(userinfo.email, 'demo@example.com');
@@ -197,13 +197,13 @@ test('xmemory uses its exact callback, Basic authentication and S256 PKCE; wrong
   }
 });
 
-test('xmemory registration is restored with stable credentials and is disabled without its secret', async () => {
+test('private client registrations are restored with stable credentials and omitted without configuration', async () => {
   const restored = await createProvider(service.settings, new Accounts());
-  const client = await restored.provider.Client.find('xmemory');
-  assert.equal(client.clientSecret, service.settings.xmemoryClientSecret);
+  const client = await restored.provider.Client.find('external-test-client');
+  assert.equal(client.clientSecret, service.clients.find(item => item.client_id === 'external-test-client').client_secret);
   assert.equal(client.tokenEndpointAuthMethod, 'client_secret_basic');
-  const disabled = await createProvider({ ...service.settings, xmemoryClientSecret: undefined }, new Accounts());
-  assert.equal(await disabled.provider.Client.find('xmemory'), undefined);
+  const disabled = await createProvider({ ...service.settings, clientsFile: undefined }, new Accounts());
+  assert.equal(await disabled.provider.Client.find('external-test-client'), undefined);
 });
 
 test('sign-out clears the local account and the Current provider SSO session', async t => {

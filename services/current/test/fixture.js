@@ -1,5 +1,8 @@
 import http from 'node:http';
 import { once } from 'node:events';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import express from 'express';
 import { generateKeyPair, exportJWK, SignJWT } from 'jose';
 import { createHash } from 'node:crypto';
@@ -60,15 +63,24 @@ export async function fixture() {
   const host = await listen(undefined, '0.0.0.0');
   const port = host.server.address().port;
   const origin = `http://127.0.0.1:${port}`;
+  const directory = await mkdtemp(join(tmpdir(), 'current-clients-'));
+  const clientsFile = join(directory, 'clients.json');
+  await writeFile(clientsFile, JSON.stringify([{
+    client_id: 'external-test-client', client_secret: 'test-client-secret-for-local-fixtures-only',
+    client_name: 'External service', application_type: 'web',
+    redirect_uris: [`http://localhost:${port}/service-callback`],
+    response_types: ['code'], grant_types: ['authorization_code', 'refresh_token'],
+    token_endpoint_auth_method: 'client_secret_basic',
+  }]), { mode: 0o600 });
   const settings = {
     development: true, currentOrigin: origin, dimaOrigin: `http://localhost:${port}`,
     googleIssuer: upstream.origin, googleId: 'test-google', googleSecret: 'test-secret', registrationToken: random(),
     githubId: 'test-github', githubSecret: 'github-secret',
-    xmemoryClientSecret: 'test-xmemory-client-secret-for-local-fixtures-only',
+    clientsFile,
   };
   let service;
   try { service = await createApp(settings); }
-  catch (error) { await host.close(); await upstream.close(); throw error; }
+  catch (error) { await host.close(); await upstream.close(); await rm(directory, { recursive: true, force: true }); throw error; }
   host.server.on('request', service.app);
-  return { ...service, origin, settings, control, close: async () => { await host.close(); await upstream.close(); } };
+  return { ...service, origin, settings, control, close: async () => { await host.close(); await upstream.close(); await rm(directory, { recursive: true, force: true }); } };
 }

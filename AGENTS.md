@@ -1,5 +1,7 @@
 # Deployment instructions
 
+- Treat external OAuth/OIDC services as opaque clients. Keep their implementation, configuration, and deployment details outside this repository; Current needs only ordinary client registrations and exact callback URL allowlists.
+
 - `vendor/prnui` is a Git submodule tracking `main` in `https://github.com/dkorolev/prnui.git`. That repository is the single source of truth for PRN UI. Do not copy or edit its HTML in homepage; make UI changes upstream first.
 - Before **every deployment**, including deployments of unrelated homepage changes, fetch the latest PRN UI with `git submodule update --init --remote --checkout -- vendor/prnui`. This is the submodule equivalent of pulling upstream `main`. Preserve any local submodule edits; resolve them before updating.
 - Run `node --test vendor/prnui/test/prnui.test.mjs` and `cargo test -p homepage`. Commit any changed `vendor/prnui` gitlink in the deployment branch, so the deployed version is recorded in homepage history.
