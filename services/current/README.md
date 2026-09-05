@@ -7,12 +7,19 @@
 Use Node 24 LTS or newer supported LTS:
 
 ```sh
+git submodule update --init --checkout -- vendor/prnui
 cd services/current
 npm ci
 npm start
 ```
 
 Open `http://127.0.0.1:3100`. The separate relying party is `http://localhost:3100/current-demo`. Google requires a Web client with `http://127.0.0.1:3100/auth/google/callback` registered for local testing. Export the credentials before starting (or use Node's `--env-file`); `.env` is not loaded automatically. The no-auth MCP/color demo works without credentials. Plain HTTP loopback uses a SameSite=Lax development cookie fallback. Use HTTPS to exercise the production SameSite=None SSO policy, including cross-site authorization POST requests.
+
+## Shared PRN UI
+
+Current's homepage, account and consent screens, setup guide, and dima relying-party demo use the PRN design system. At startup, the service reads the stylesheet directly from `vendor/prnui/prnui.html` and serves it as `/assets/prnui.css`. The upstream submodule owns the colors, typography, chamfers, cards, buttons, and fields. `public/style.css` contains Current's layouts and responsive adjustments; the specimen's JavaScript is not needed for Current's own interactions.
+
+Follow the repository's [deployment instructions](../../AGENTS.md): update the submodule from upstream `main`, test, and commit any changed gitlink before every deployment. Initialize that recorded revision on the server before restarting Current. A service restart loads any updated upstream styles. The standalone `/prn` specimen still comes from the Rust binary and requires rebuilding when its upstream HTML changes.
 
 ## Provider setup
 

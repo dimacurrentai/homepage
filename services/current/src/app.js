@@ -7,12 +7,14 @@ import { createProvider } from './provider.js';
 import { mountClients } from './clients.js';
 import { colorBoard, mountMcp } from './mcp.js';
 import { page, escape, form } from './views.js';
+import { loadPrnuiCss } from './prnui.js';
 
 export async function createApp(settings) {
   for (const value of [settings.currentOrigin, settings.dimaOrigin]) {
     const url = new URL(value);
     if (url.origin !== value || (url.protocol !== 'https:' && !(settings.development && ['127.0.0.1', 'localhost'].includes(url.hostname)))) throw new Error('Demo origins must be HTTPS origins (or loopback in development).');
   }
+  const prnuiCss = await loadPrnuiCss();
   const accounts = new Accounts();
   const board = colorBoard();
   const providerData = await createProvider(settings, accounts);
@@ -68,6 +70,7 @@ export async function createApp(settings) {
   app.use((req, res, next) => (req.demoOrigin === settings.currentOrigin ? current : dima)(req, res, next));
 
   current.get('/healthz', (_req, res) => res.json({ ok: true, service: 'current-demos' }));
+  current.get('/assets/prnui.css', (_req, res) => res.type('css').send(prnuiCss));
   current.use('/assets', express.static(fileURLToPath(new URL('../public', import.meta.url)), { index: false, maxAge: 0 }));
   current.get('/', (_req, res) => res.sendFile(fileURLToPath(new URL('../public/index.html', import.meta.url))));
   current.get('/api/colors', (_req, res) => res.json({ latest: board.latest() }));
@@ -104,7 +107,7 @@ export async function createApp(settings) {
   }));
   current.get('/account', (req, res) => {
     const account = accounts.bySub.get(req.demoSession.accountId);
-    res.send(page('Your demo session', `<p class="eyebrow">IDENTITY / IN MEMORY</p><h1>${account ? `Current ${escape(account.current_id)}` : 'Your demo session'}</h1>${account ? `<p>Signed in as ${escape(account.name)}. This ID lasts until the service restarts.</p><div class="actions"><a class="button" href="${settings.dimaOrigin}/current-demo">Try it on dima.ai →</a><a class="button secondary" href="/clients">Register a service</a></div>${form('/account/logout', req.demoSession.csrf, '<button class="text-button">Sign out of Current</button>')}` : '<p>Create a Current account with Google to try the identity provider.</p><a class="button" href="/auth/google">Continue with Google →</a>'}${req.demoSession.result ? `<h2>Last verified sign-in</h2><pre>${escape(JSON.stringify(req.demoSession.result, null, 2))}</pre>` : ''}`));
+    res.send(page('Your demo session', `<p class="eyebrow">IDENTITY / IN MEMORY</p><h1>${account ? `Current ${escape(account.current_id)}` : 'Your demo session'}</h1>${account ? `<p>Signed in as ${escape(account.name)}. This ID lasts until the service restarts.</p><div class="actions"><a class="chamfer btn btn--cyan button" href="${settings.dimaOrigin}/current-demo"><span>Try it on dima.ai →</span></a><a class="chamfer btn btn--muted button secondary" href="/clients"><span>Register a service</span></a></div>${form('/account/logout', req.demoSession.csrf, '<button class="text-button">Sign out of Current</button>')}` : '<p>Create a Current account with Google to try the identity provider.</p><a class="chamfer btn btn--cyan button" href="/auth/google"><span>Continue with Google →</span></a>'}${req.demoSession.result ? `<h2>Last verified sign-in</h2><pre>${escape(JSON.stringify(req.demoSession.result, null, 2))}</pre>` : ''}`));
   });
   current.post('/account/logout', csrf, (req, res) => {
     delete req.demoSession.accountId;
@@ -135,8 +138,8 @@ export async function createApp(settings) {
     const account = accounts.bySub.get(details.prompt.name === 'consent' ? details.session?.accountId : req.demoSession.accountId);
     const ready = details.prompt.name === 'consent' ? !!account : canLogin(req, details);
     const body = ready ? form(`/interaction/${details.uid}`, req.demoSession.csrf,
-      `<p>Continue as <strong>${escape(account.name)}</strong> · Current <strong>${escape(account.current_id)}</strong>.</p><p>Requested access: <strong>${escape(details.params.scope)}</strong>.</p><p>Return to <code>${escape(new URL(details.params.redirect_uri).origin)}</code>.</p><button name="action" value="approve">${details.prompt.name === 'consent' ? 'Allow access' : 'Continue'} →</button> <button class="secondary" name="action" value="deny">Cancel</button>`) :
-      `<p>${account ? 'This service requires a fresh sign-in. Continue with Google again.' : 'Use your Google account to create a temporary Current identity, then continue to this service.'}</p><a class="button" href="/auth/google?return_to=${encodeURIComponent(`/interaction/${details.uid}`)}">Continue with Google →</a>${form(`/interaction/${details.uid}`, req.demoSession.csrf, '<button class="text-button" name="action" value="deny">Cancel sign-in</button>')}`;
+      `<p>Continue as <strong>${escape(account.name)}</strong> · Current <strong>${escape(account.current_id)}</strong>.</p><p>Requested access: <strong>${escape(details.params.scope)}</strong>.</p><p>Return to <code>${escape(new URL(details.params.redirect_uri).origin)}</code>.</p><button class="chamfer btn btn--cyan" name="action" value="approve"><span>${details.prompt.name === 'consent' ? 'Allow access' : 'Continue'} →</span></button> <button class="chamfer btn btn--muted secondary" name="action" value="deny"><span>Cancel</span></button>`) :
+      `<p>${account ? 'This service requires a fresh sign-in. Continue with Google again.' : 'Use your Google account to create a temporary Current identity, then continue to this service.'}</p><a class="chamfer btn btn--cyan button" href="/auth/google?return_to=${encodeURIComponent(`/interaction/${details.uid}`)}"><span>Continue with Google →</span></a>${form(`/interaction/${details.uid}`, req.demoSession.csrf, '<button class="text-button" name="action" value="deny">Cancel sign-in</button>')}`;
     res.send(page('Sign in with Current', `<p class="eyebrow">CURRENT / IDENTITY PROVIDER</p><h1>${escape(client.clientName || client.clientId)}<br>wants to connect.</h1>${body}`));
   });
   current.post('/interaction/:uid', csrf, async (req, res) => {
@@ -161,7 +164,7 @@ export async function createApp(settings) {
   const registrations = new Map();
   current.get('/clients', (req, res) => {
     if (!accounts.bySub.has(req.demoSession.accountId)) return res.redirect(303, '/account');
-    res.send(page('Register a service', `<p class="eyebrow">OAUTH 2.0 / OPENID CONNECT</p><h1>Add “Sign in<br>with Current”.</h1><p>Register an exact HTTPS callback URL. Your client credentials expire after 24 hours and disappear on restart. Use authorization code flow with S256 PKCE.</p>${form('/clients', req.demoSession.csrf, '<label>Service name<input name="name" required maxlength="80" placeholder="My service"></label><label>Callback URL<input type="url" name="redirect_uri" required maxlength="2048" placeholder="https://example.com/auth/callback"></label><button>Create client →</button>')}`));
+    res.send(page('Register a service', `<p class="eyebrow">OAUTH 2.0 / OPENID CONNECT</p><h1>Add “Sign in<br>with Current”.</h1><p>Register an exact HTTPS callback URL. Your client credentials expire after 24 hours and disappear on restart. Use authorization code flow with S256 PKCE.</p>${form('/clients', req.demoSession.csrf, '<label>Service name<span class="chamfer field-control"><input class="field-input" name="name" required maxlength="80" placeholder="My service"></span></label><label>Callback URL<span class="chamfer field-control"><input class="field-input" type="url" name="redirect_uri" required maxlength="2048" placeholder="https://example.com/auth/callback"></span></label><button class="chamfer btn btn--cyan"><span>Create client →</span></button>')}`));
   });
   current.post('/clients', csrf, async (req, res) => {
     const owner = req.demoSession.accountId;

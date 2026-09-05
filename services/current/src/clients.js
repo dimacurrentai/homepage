@@ -115,7 +115,7 @@ export function mountClients(app, settings, accounts, providerData, fetchImpl) {
     mountDima(dima) {
       dima.get('/current-demo', (req, res) => {
         const result = req.demoSession.result;
-        res.send(page('Sign in with Current', `<p class="eyebrow">DIMA.AI / RELYING PARTY</p><h1>One identity.<br>Another service.</h1><p>This page is on dima.ai. Sign in through Current to see your identity verified here.</p><a class="button" href="/current-demo/login">Sign in with Current →</a>${result ? `<h2>Verified by dima.ai</h2><pre>${escape(JSON.stringify(result, null, 2))}</pre>${form('/current-demo/logout', req.demoSession.csrf, '<button>Clear this session</button>')}` : ''}<p><a href="${settings.currentOrigin}">Back to Current demos</a></p>`, settings.currentOrigin));
+        res.send(page('Sign in with Current', `<p class="eyebrow">DIMA.AI / RELYING PARTY</p><h1>One identity.<br>Another service.</h1><p>This page is on dima.ai. Sign in through Current to see your identity verified here.</p><a class="chamfer btn btn--cyan button" href="/current-demo/login"><span>Sign in with Current →</span></a>${result ? `<h2>Verified by dima.ai</h2><pre>${escape(JSON.stringify(result, null, 2))}</pre>${form('/current-demo/logout', req.demoSession.csrf, '<button class="chamfer btn btn--cyan"><span>Clear this session</span></button>')}` : ''}<p><a href="${settings.currentOrigin}">Back to Current demos</a></p>`, settings.currentOrigin));
       });
       dima.get('/current-demo/login', (req, res) => start(req, res, 'dima', `${settings.dimaOrigin}/current-demo/callback`, '/current-demo'));
       dima.get('/current-demo/callback', (req, res) => finish(req, res, 'dima'));
