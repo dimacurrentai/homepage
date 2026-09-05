@@ -68,11 +68,23 @@ document.querySelector('#color-form').addEventListener('submit', async event => 
 });
 
 const endpoint = `${location.origin}/mcp`;
-document.querySelector('#mcp-url').textContent = endpoint;
-document.querySelector('#copy-mcp').addEventListener('click', async event => {
-  try { await navigator.clipboard.writeText(endpoint); event.target.textContent = 'Copied'; }
-  catch { event.target.textContent = 'Select URL to copy'; }
-});
+document.querySelector('#mcp-url').value = endpoint;
+const agentPrompt = document.querySelector('#mcp-agent-prompt');
+agentPrompt.value = agentPrompt.value.replace('https://current.ai/mcp', endpoint);
+for (const button of document.querySelectorAll('[data-copy]')) {
+  button.addEventListener('click', async () => {
+    const field = document.getElementById(button.dataset.copy);
+    const status = document.querySelector('#mcp-copy-status');
+    try {
+      await navigator.clipboard.writeText(field.value);
+      status.textContent = button.dataset.copied;
+    } catch {
+      field.focus();
+      field.select();
+      status.textContent = 'Text selected. Use your device’s Copy action, or press Ctrl+C / ⌘C.';
+    }
+  });
+}
 
 fetch('/api/session').then(response => response.json()).then(session => {
   if (session.account) {

@@ -18,7 +18,39 @@
         <article class="card"><div class="card-top"><span class="number">01</span><span class="tag">OAUTH 2.0 CLIENT</span></div><h3>Bring your identity.</h3><p>Sign in with Google or GitHub and inspect the profile returned to Current. No inbox or repository access.</p><div class="actions"><a class="button" href="/auth/google">Sign in with Google</a><a class="button secondary" href="/auth/github">Sign in with GitHub</a></div><p class="small" id="provider-status">Google sign-in also creates your temporary Current account.</p></article>
         <article class="card"><div class="card-top"><span class="number">02</span><span class="tag">OAUTH 2.0 SERVER</span></div><h3>Take Current with you.</h3><p>Get a random six-digit Current ID through Google. Then let another service sign you in through Current.</p><div class="identity-preview"><span>CURRENT ID</span><strong id="current-id">••• •••</strong><span>YOURS FOR THIS EXPERIMENT</span></div><div class="actions"><a class="button" href="https://dima.ai/current-demo" id="dima-link">Try on dima.ai ↗</a><a class="text-link" href="/demo/oauth">OAuth-only flow →</a></div></article>
         <article class="card"><div class="card-top"><span class="number">03</span><span class="tag">OPENID CONNECT</span></div><h3>A verifiable sign-in.</h3><p>Run the complete authorization code journey: discovery, consent, signed identity token, and a profile checked by the client.</p><div class="flow"><span>Client</span><b>→</b><span>Current</span><b>→</b><span>Verified identity</span></div><div class="actions"><a class="button" href="/demo/oidc">Try OIDC sign-in</a><a class="text-link" href="/.well-known/openid-configuration">Discovery ↗</a></div><p class="small"><a href="/clients">Register your own service</a> · <a href="/setup">Connect an Okta provider</a><span id="enterprise-link" hidden> · <a href="/auth/enterprise">Enterprise sign-in →</a></span></p></article>
-        <article class="card color-card"><div class="card-top"><span class="number">04</span><span class="tag">PUBLIC MCP SERVER</span></div><h3>A name. A random color.</h3><p>A tiny tool for an agent—or for you. Say your name and join the board. The latest five submissions are visible to everyone.</p><form id="color-form"><label for="color-name" class="sr-only">Public display name</label><div class="input-row"><input id="color-name" name="name" placeholder="Your public name" required maxlength="60" autocomplete="off"><button type="submit">Get a color ↗</button></div></form><p id="color-status" role="status" class="small">No account needed. Your name will be public.</p><p class="endpoint"><span>STREAMABLE HTTP</span><code id="mcp-url">https://current.ai/mcp</code><button id="copy-mcp" class="text-button" type="button">Copy</button></p></article>
+        <article class="card color-card">
+          <div class="card-top"><span class="number">04</span><span class="tag">PUBLIC MCP SERVER</span></div>
+          <h3>A name. A random color.</h3><p>A tiny tool for an agent—or for you. Say your name and join the board. The latest five submissions are visible to everyone.</p>
+          <form id="color-form"><label for="color-name" class="sr-only">Public display name</label><div class="input-row"><input id="color-name" name="name" placeholder="Your public name" required maxlength="60" autocomplete="off"><button type="submit">Get a color ↗</button></div></form>
+          <p id="color-status" role="status" class="small">No account needed. Your name will be public.</p>
+          <div class="mcp-connect" id="connect-mcp">
+            <details>
+              <summary>Connect ChatGPT or Claude</summary>
+              <ol class="mcp-steps">
+                <li>Copy this server URL.
+                  <label class="sr-only" for="mcp-url">MCP server URL</label><input id="mcp-url" value="https://current.ai/mcp" readonly spellcheck="false">
+                  <button class="text-button" type="button" data-copy="mcp-url" data-copied="Server URL copied. Paste it into the connection settings below.">Copy server URL</button>
+                </li>
+                <li>Open your app and add a connection named <strong>Current Colors</strong>.
+                  <p><a href="https://chatgpt.com/plugins" target="_blank" rel="noopener noreferrer">Open ChatGPT Plugins ↗</a> → <strong>+</strong> → paste the URL under <strong>Connection</strong>. Choose no authentication if asked.</p>
+                  <p><a href="https://claude.ai/customize/connectors" target="_blank" rel="noopener noreferrer">Open Claude Connectors ↗</a> → <strong>+</strong> → <strong>Add custom connector</strong> → paste the URL → <strong>Add</strong>. Leave OAuth settings empty.</p>
+                </li>
+                <li>Enable Current Colors in a chat’s tools menu, then paste this:
+                  <label class="sr-only" for="mcp-chat-prompt">Prompt for ChatGPT or Claude</label><textarea id="mcp-chat-prompt" rows="3" readonly>Use Current Colors. Ask me for a public display name, give it a random color, and show me the latest five names and colors.</textarea>
+                  <button class="text-button" type="button" data-copy="mcp-chat-prompt" data-copied="Prompt copied. Paste it into your chat with Current Colors enabled.">Copy chat prompt</button>
+                </li>
+              </ol>
+              <p class="small">ChatGPT needs Developer mode in Settings → Security and login. A workspace admin may need to enable custom connections. Setup guides: <a href="https://developers.openai.com/plugins/deploy/connect-chatgpt" target="_blank" rel="noopener noreferrer">ChatGPT ↗</a> · <a href="https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp" target="_blank" rel="noopener noreferrer">Claude ↗</a></p>
+            </details>
+            <details>
+              <summary>Use Codex or Claude Code</summary>
+              <p>Copy this prompt into your coding agent. It will set up the connection and help you try it.</p>
+              <label class="sr-only" for="mcp-agent-prompt">Prompt for Codex or Claude Code</label><textarea id="mcp-agent-prompt" rows="7" readonly>Connect this coding agent to the Current Colors MCP server at https://current.ai/mcp (HTTP, no authentication). Configure it for this agent, keeping my existing connections. Then ask me for a public display name, call assign_color, and show my color and the latest_colors. If loading the tools needs a new session, tell me how to resume.</textarea>
+              <button class="button" type="button" data-copy="mcp-agent-prompt" data-copied="Prompt copied. Paste it into Codex or Claude Code.">Copy agent prompt</button>
+            </details>
+            <p id="mcp-copy-status" class="small" role="status"></p>
+          </div>
+        </article>
       </div>
     </section>
     <section class="board"><div class="section-heading"><h2>The latest five.</h2><span class="eyebrow"><span class="status-dot"></span> PUBLIC COLOR BOARD</span></div><div id="color-board" aria-live="polite"><p class="muted">Loading the color board…</p></div></section>
