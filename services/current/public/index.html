@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Working demos of OAuth, OpenID Connect, and tools for agents. Sign in, connect a service, or give your name a color.">
+  <title>Current · Tools that connect</title>
+  <link rel="stylesheet" href="/assets/style.css"><script src="/assets/site.js" defer></script>
+</head>
+<body>
+  <header><a class="wordmark" href="/">current<span>↗</span></a><nav><a href="#demos">Demos</a><a href="/setup">Build with Current</a><a href="/account" id="account-link">Your account</a></nav></header>
+  <main>
+    <section class="hero">
+      <div><p class="eyebrow"><span class="status-dot"></span> THE CURRENT PLAYGROUND</p><h1>Tools that<br>connect<span class="orange">.</span></h1><p class="intro">Identity for people. Interfaces for agents.<br>A few working experiments you can try right now.</p><a class="button" href="#demos">Explore the demos <span>↓</span></a></div>
+      <div class="connection-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><span class="node node-you">YOU</span><span class="node node-app">APP</span><span class="node node-agent">AGENT</span><span class="center-node">c<span>↗</span></span><span class="art-caption">A COMMON POINT OF CONNECTION</span></div>
+    </section>
+    <section id="demos"><div class="section-heading"><h2>Try a connection.</h2><span class="eyebrow">01—04 / LIVE DEMOS</span></div>
+      <div class="cards">
+        <article class="card"><div class="card-top"><span class="number">01</span><span class="tag">OAUTH 2.0 CLIENT</span></div><h3>Bring your identity.</h3><p>Sign in with Google or GitHub and inspect the profile returned to Current. No inbox or repository access.</p><div class="actions"><a class="button" href="/auth/google">Sign in with Google</a><a class="button secondary" href="/auth/github">Sign in with GitHub</a></div><p class="small" id="provider-status">Google sign-in also creates your temporary Current account.</p></article>
+        <article class="card"><div class="card-top"><span class="number">02</span><span class="tag">OAUTH 2.0 SERVER</span></div><h3>Take Current with you.</h3><p>Get a random six-digit Current ID through Google. Then let another service sign you in through Current.</p><div class="identity-preview"><span>CURRENT ID</span><strong id="current-id">••• •••</strong><span>YOURS FOR THIS EXPERIMENT</span></div><div class="actions"><a class="button" href="https://dima.ai/current-demo" id="dima-link">Try on dima.ai ↗</a><a class="text-link" href="/demo/oauth">OAuth-only flow →</a></div></article>
+        <article class="card"><div class="card-top"><span class="number">03</span><span class="tag">OPENID CONNECT</span></div><h3>A verifiable sign-in.</h3><p>Run the complete authorization code journey: discovery, consent, signed identity token, and a profile checked by the client.</p><div class="flow"><span>Client</span><b>→</b><span>Current</span><b>→</b><span>Verified identity</span></div><div class="actions"><a class="button" href="/demo/oidc">Try OIDC sign-in</a><a class="text-link" href="/.well-known/openid-configuration">Discovery ↗</a></div><p class="small"><a href="/clients">Register your own service</a> · <a href="/setup">Connect an Okta provider</a><span id="enterprise-link" hidden> · <a href="/auth/enterprise">Enterprise sign-in →</a></span></p></article>
+        <article class="card color-card"><div class="card-top"><span class="number">04</span><span class="tag">PUBLIC MCP SERVER</span></div><h3>A name. A random color.</h3><p>A tiny tool for an agent—or for you. Say your name and join the board. The latest five submissions are visible to everyone.</p><form id="color-form"><label for="color-name" class="sr-only">Public display name</label><div class="input-row"><input id="color-name" name="name" placeholder="Your public name" required maxlength="60" autocomplete="off"><button type="submit">Get a color ↗</button></div></form><p id="color-status" role="status" class="small">No account needed. Your name will be public.</p><p class="endpoint"><span>STREAMABLE HTTP</span><code id="mcp-url">https://current.ai/mcp</code><button id="copy-mcp" class="text-button" type="button">Copy</button></p></article>
+      </div>
+    </section>
+    <section class="board"><div class="section-heading"><h2>The latest five.</h2><span class="eyebrow"><span class="status-dot"></span> PUBLIC COLOR BOARD</span></div><div id="color-board" aria-live="polite"><p class="muted">Loading the color board…</p></div></section>
+    <section class="build-note"><div><p class="eyebrow">OPEN IT UP</p><h2>Bring your own service.<br>Or your own agent.</h2></div><div><p>Register an OAuth/OIDC client, point an MCP client at the color tool, or inspect the protocol endpoints.</p><a class="text-link" href="/setup">The integration guide →</a><p class="small">This is a playground. Accounts, IDs, integrations, and colors are kept in memory and reset when the service restarts.</p></div></section>
+  </main>
+  <footer><span>Current · Working experiments</span><div><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/c5t/current">Current on GitHub ↗</a></div></footer>
+</body>
+</html>
