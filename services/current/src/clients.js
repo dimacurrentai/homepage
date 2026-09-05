@@ -46,7 +46,7 @@ export function mountClients(app, settings, accounts, providerData, fetchImpl) {
     const verifier = oidc.randomPKCECodeVerifier();
     const nonce = ['oauth', 'github'].includes(type) ? undefined : random();
     const state = beginFlow(req, { type, verifier, nonce, returnTo, callback });
-    const scope = type === 'github' ? 'read:user user:email' : type === 'oauth' ? 'profile' : 'openid profile email';
+    const scope = type === 'github' ? 'read:user' : type === 'oauth' ? 'profile' : 'openid profile email';
     const params = {
       redirect_uri: callback, scope, state,
       code_challenge: await oidc.calculatePKCECodeChallenge(verifier), code_challenge_method: 'S256',
@@ -72,6 +72,7 @@ export function mountClients(app, settings, accounts, providerData, fetchImpl) {
       const response = await fetchImpl('https://api.github.com/user', { headers });
       if (!response.ok) throw new Error('GitHub profile request failed.');
       const data = await response.json();
+      if (!Number.isSafeInteger(data.id) || data.id <= 0 || typeof data.login !== 'string') throw new Error('GitHub returned an invalid profile.');
       profile = { sub: String(data.id), name: data.name || data.login, login: data.login };
       req.demoSession.github = profile;
     } else if (type === 'oauth') {

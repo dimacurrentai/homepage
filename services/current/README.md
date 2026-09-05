@@ -12,7 +12,7 @@ npm ci
 npm start
 ```
 
-Open `http://127.0.0.1:3100`. The separate relying party is `http://localhost:3100/current-demo`. Google requires a Web client with `http://127.0.0.1:3100/auth/google/callback` registered for local testing. Export the credentials before starting (or use Node's `--env-file`); `.env` is not loaded automatically. The no-auth MCP/color demo works without credentials.
+Open `http://127.0.0.1:3100`. The separate relying party is `http://localhost:3100/current-demo`. Google requires a Web client with `http://127.0.0.1:3100/auth/google/callback` registered for local testing. Export the credentials before starting (or use Node's `--env-file`); `.env` is not loaded automatically. The no-auth MCP/color demo works without credentials. Plain HTTP loopback uses a SameSite=Lax development cookie fallback. Use HTTPS to exercise the production SameSite=None SSO policy, including cross-site authorization POST requests.
 
 ## Provider setup
 
@@ -52,6 +52,8 @@ MCP tools: `assign_color({"name":"Ada"})` and `latest_colors({})`. Resource: `cu
 
 Accounts, six-digit IDs, grants, clients, sessions, and colors are **in memory**. Accounts remain until restart; browser sessions, grants, and refresh tokens expire after one hour. Access/ID tokens last ten minutes, codes one minute, pending sign-ins ten minutes, and registered clients 24 hours. Storage has hard capacity limits and expirations. A random opaque `sub` prevents recycled six-digit IDs from identifying another account after restart. Integrations must use `sub`, not `current_id`, as their identity key. The durable signing key contains no user data.
 
+Authorization accepts both GET and POST. Dynamic client management supports authenticated read, update, and deletion.
+
 The implementation uses pinned `oidc-provider` and `openid-client` versions. It supports the OIDC **authorization code** profile, RS256 ID tokens, discovery, UserInfo, claims requests, consent, refresh, revocation, introspection, DCR, and RP-initiated logout. It does not advertise implicit/hybrid flows. Native clients require PKCE; all built-in clients use S256 PKCE. Google/OIDC callbacks check browser-bound state, nonce, issuer, audience, expiration, signature, and matching UserInfo subject. Access tokens and secrets are never displayed in demo results or request logs.
 
 ## Deploy
@@ -61,7 +63,7 @@ The server needs Node 24 LTS under `/home/ec2-user/.local/current-node`. Downloa
 ```sh
 cd /home/ec2-user/website/services/current
 PATH=/home/ec2-user/.local/current-node/bin:$PATH npm ci --omit=dev
-node scripts/generate-jwks.js /home/ec2-user/.config/current-demos-jwks.json
+/home/ec2-user/.local/current-node/bin/node scripts/generate-jwks.js /home/ec2-user/.config/current-demos-jwks.json
 ```
 
 Run the key-generation command **once**, using the installed Node binary or PATH above. Create `/home/ec2-user/.config/current-demos.env` from `.env.example`, mode 0600, outside the repository. Install `config/current-demos.service` in `/etc/systemd/system/`, then:
