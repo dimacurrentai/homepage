@@ -19,6 +19,15 @@ export async function createProvider(settings, accounts) {
     response_types: ['code'], grant_types: ['authorization_code', 'refresh_token'],
     token_endpoint_auth_method: 'client_secret_basic',
   }));
+  // This deployed integration must keep its credentials across service restarts.
+  // Other registrations remain temporary; the xmemory secret lives outside Git.
+  if (settings.xmemoryClientSecret) clients.push({
+    client_id: 'xmemory', client_secret: settings.xmemoryClientSecret,
+    client_name: 'xmemory', application_type: 'web',
+    redirect_uris: ['https://dk.xmemory.ai/console/login/sso/callback'],
+    response_types: ['code'], grant_types: ['authorization_code', 'refresh_token'],
+    token_endpoint_auth_method: 'client_secret_basic',
+  });
   const registrationToken = settings.registrationToken || random();
   const provider = new Provider(settings.currentOrigin, {
     adapter: memoryAdapter(), clients, jwks,

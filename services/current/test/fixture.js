@@ -64,6 +64,7 @@ export async function fixture() {
     development: true, currentOrigin: origin, dimaOrigin: `http://localhost:${port}`,
     googleIssuer: upstream.origin, googleId: 'test-google', googleSecret: 'test-secret', registrationToken: random(),
     githubId: 'test-github', githubSecret: 'github-secret',
+    xmemoryClientSecret: 'test-xmemory-client-secret-for-local-fixtures-only',
   };
   let service;
   try { service = await createApp(settings); }
