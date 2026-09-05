@@ -409,6 +409,11 @@ async fn anthropiclimits_page() -> Html<&'static str> {
   Html(include_str!("../../../static/anthropiclimits-probe/index.html"))
 }
 
+async fn prnui_page() -> impl IntoResponse {
+  // Keep the specimen byte-for-byte upstream; update the submodule before each deployment.
+  ([(header::CACHE_CONTROL, "no-cache")], Html(include_str!("../../../vendor/prnui/prnui.html")))
+}
+
 const ZOOM_URL: &str = "https://us06web.zoom.us/j/2332123321";
 
 async fn zoom_redirect() -> impl IntoResponse {
@@ -748,6 +753,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     .route("/blog/chinese/invited-technical-cofounder", get(blog_chinese_redirect))
     .route("/zoom", get(zoom_redirect))
     .route("/anthropiclimits", get(anthropiclimits_page))
+    .route("/prn", get(prnui_page))
+    .route("/prn/", get(prnui_page))
     .nest_service("/static", ServeDir::new(&static_dir))
     .nest_service("/.well-known/acme-challenge", ServeDir::new(static_dir.join(ACME_CHALLENGE_DIR)))
     .nest_service("/.well-known", ServeDir::new(&static_dir))
@@ -838,6 +845,8 @@ mod tests {
     let state =
       RequestMiddlewareState { static_dir: static_dir.clone(), pad_dir: pad_dir.clone(), current_proxy: None };
     Router::new()
+      .route("/prn", axum::routing::get(prnui_page))
+      .route("/prn/", axum::routing::get(prnui_page))
       .nest_service("/static", ServeDir::new(&static_dir))
       // Production keeps ACME tokens under the static dir; tests keep them in scratch.
       .nest_service("/.well-known/acme-challenge", ServeDir::new(pad_dir.join(ACME_CHALLENGE_DIR)))
@@ -852,6 +861,26 @@ mod tests {
   async fn body_string(response: Response) -> String {
     let bytes = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
     String::from_utf8(bytes.to_vec()).unwrap()
+  }
+
+  #[tokio::test]
+  async fn prnui_serves_the_upstream_specimen_without_login() {
+    let app = test_app(repo_static_dir());
+    let source =
+      std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../vendor/prnui/prnui.html")).unwrap();
+    for path in ["/prn", "/prn/"] {
+      let request = Request::get(path).header(header::HOST, "dima.ai").body(Body::empty()).unwrap();
+      let response = app.clone().oneshot(request).await.unwrap();
+      assert_eq!(response.status(), StatusCode::OK);
+      assert_eq!(response.headers()[header::CONTENT_TYPE], "text/html; charset=utf-8");
+      assert_eq!(response.headers()[header::CACHE_CONTROL], "no-cache");
+      assert_eq!(body_string(response).await, source);
+    }
+    let request = Request::head("/prn").body(Body::empty()).unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(body_string(response).await.is_empty());
+    assert_eq!(get(&app, "/prn/.git").await.status(), StatusCode::NOT_FOUND);
   }
 
   #[test]
@@ -871,7 +900,7 @@ mod tests {
     let app = test_app(pad_dir.clone());
 
     // Current paths, including discovery, reach the sidecar; never the personal site.
-    for path in ["/", "/some/path?q=1", "/pad", "/static/favicon.svg", "/.well-known"] {
+    for path in ["/", "/some/path?q=1", "/pad", "/prn", "/static/favicon.svg", "/.well-known"] {
       let request = Request::get(path).header(header::HOST, "current.ai").body(Body::empty()).unwrap();
       let response = app.clone().oneshot(request).await.unwrap();
       assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE, "{path}");
