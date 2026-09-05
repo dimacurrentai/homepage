@@ -80,6 +80,8 @@ Before replacing a running Rust executable, copy it to a rollback filename. If c
 
 ## Verification
 
+See the [deployment verification record](VERIFICATION.md) for measured results, OpenID Foundation suite outcomes, and remaining external provider configuration.
+
 ```sh
 npm ci
 npx playwright install chromium
