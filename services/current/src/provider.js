@@ -36,6 +36,16 @@ export async function createProvider(settings, accounts) {
       revocation: { enabled: true, allowedPolicy: (_ctx, client, token) => token.clientId === client.clientId },
       introspection: { enabled: true, allowedPolicy: (_ctx, client, token) => token.clientId === client.clientId },
       claimsParameter: { enabled: true },
+      rpInitiatedLogout: {
+        enabled: true,
+        logoutSource: async (ctx, logoutForm) => {
+          // Keep the library's form, action, and CSRF token intact.
+          ctx.body = page('Sign out of Current', `<p class="eyebrow">CURRENT / SIGN OUT</p><h1>End this sign-in?</h1><p>Sign out of Current on this browser.</p>${logoutForm}<div class="actions"><button class="chamfer btn btn--cyan" autofocus type="submit" form="op.logoutForm" value="yes" name="logout"><span>Yes, sign me out</span></button><button class="chamfer btn btn--muted" type="submit" form="op.logoutForm"><span>No, stay signed in</span></button></div>`);
+        },
+        postLogoutSuccessSource: async ctx => {
+          ctx.body = page('Signed out', '<p class="eyebrow">CURRENT / SIGN OUT</p><h1>Sign-out complete.</h1><p>You can sign in again whenever you want to try another connection.</p><a class="chamfer btn btn--cyan" href="/"><span>Back to the demos →</span></a>');
+        },
+      },
     },
     rotateRefreshToken: () => true,
     ttl: {
