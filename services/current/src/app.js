@@ -65,6 +65,7 @@ export async function createApp(settings) {
     if (!req.path.startsWith('/oauth/')) res.set('Content-Security-Policy', `default-src 'self'; script-src 'self'; style-src 'self' ${settings.currentOrigin}; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`);
     next();
   });
+  app.get('/static/favicon.svg', (_req, res) => res.sendFile(fileURLToPath(new URL('../../../static/favicon.svg', import.meta.url))));
   const current = express.Router();
   const dima = express.Router();
   app.use((req, res, next) => (req.demoOrigin === settings.currentOrigin ? current : dima)(req, res, next));
