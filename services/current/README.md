@@ -65,6 +65,8 @@ Accounts, six-digit IDs, grants, browser-registered clients, sessions, and color
 
 Authorization accepts both GET and POST. Dynamic client management supports authenticated read, update, and deletion.
 
+Open `/oauth/logout` directly or choose **Sign out of Current** on `/account` to sign out of this browser. Completed logout clears both Current's account session and its provider SSO session, including pending sign-ins. Canceling the confirmation preserves the Current sign-in. Google and relying-party applications retain their own sessions; sign out there separately if needed.
+
 The implementation uses pinned `oidc-provider` and `openid-client` versions. It supports the OIDC **authorization code** profile, RS256 ID tokens, discovery, UserInfo, claims requests, consent, refresh, revocation, introspection, DCR, and RP-initiated logout. It does not advertise implicit/hybrid flows. Native clients require PKCE; all built-in clients use S256 PKCE. Google/OIDC callbacks check browser-bound state, nonce, issuer, audience, expiration, signature, and matching UserInfo subject. Access tokens and secrets are never displayed in demo results or request logs.
 
 ## Deploy

@@ -93,8 +93,13 @@ export async function createApp(settings) {
   // Protocol endpoints stay stateless at this layer. Browser sessions are only
   // allocated for pages and actions that actually need a browser identity.
   const session = sessions();
-  current.use(['/auth', '/interaction', '/account', '/clients', '/demo', '/api/session'], session, formBody);
-  dima.use('/current-demo', session, formBody);
+  // This event follows the provider's CSRF check and fires even when logout
+  // redirects to a client. Cancellation also emits it, without params.logout.
+  provider.on('end_session.success', ctx => {
+    if (ctx.oidc.params.logout) session.destroy(ctx.req, ctx.res);
+  });
+  current.use(['/auth', '/interaction', '/account', '/clients', '/demo', '/api/session'], session.middleware, formBody);
+  dima.use('/current-demo', session.middleware, formBody);
   current.use('/auth', authLimiter);
   current.use('/clients', authLimiter);
   const clients = mountClients(current, settings, accounts, providerData, fetchImpl);
@@ -110,14 +115,7 @@ export async function createApp(settings) {
     const account = accounts.bySub.get(req.demoSession.accountId);
     res.send(page('Your demo session', `<p class="eyebrow">IDENTITY / IN MEMORY</p><h1>${account ? `Current ${escape(account.current_id)}` : 'Your demo session'}</h1>${account ? `<p>Signed in as ${escape(account.name)}. This ID lasts until the service restarts.</p><div class="actions"><a class="chamfer btn btn--cyan button" href="${settings.dimaOrigin}/current-demo"><span>Try it on dima.ai →</span></a><a class="chamfer btn btn--muted button secondary" href="/clients"><span>Register a service</span></a></div>${form('/account/logout', req.demoSession.csrf, '<button class="text-button">Sign out of Current</button>')}` : '<p>Create a Current account with Google to try the identity provider.</p><a class="chamfer btn btn--cyan button" href="/auth/google"><span>Continue with Google →</span></a>'}${req.demoSession.result ? `<h2>Last verified sign-in</h2><pre>${escape(JSON.stringify(req.demoSession.result, null, 2))}</pre>` : ''}`));
   });
-  current.post('/account/logout', csrf, (req, res) => {
-    delete req.demoSession.accountId;
-    delete req.demoSession.authInteraction;
-    delete req.demoSession.result;
-    delete req.demoSession.github;
-    req.rotateSession();
-    res.redirect(303, '/oauth/logout');
-  });
+  current.post('/account/logout', csrf, (_req, res) => res.redirect(303, '/oauth/logout'));
 
   async function interaction(req, res) {
     const details = await provider.interactionDetails(req, res);

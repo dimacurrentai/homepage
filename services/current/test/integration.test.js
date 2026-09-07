@@ -1,4 +1,4 @@
-import { test, before, after } from 'node:test';
+import { test, before, after, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 import * as oidc from 'openid-client';
@@ -11,10 +11,12 @@ import { createProvider } from '../src/provider.js';
 
 let service, browser;
 before(async () => {
-  service = await fixture();
   browser = await chromium.launch({ ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) });
 });
-after(async () => { await browser?.close(); await service?.close(); });
+after(async () => { await browser?.close(); });
+// Keep authentication rate limits and other in-memory state isolated per test.
+beforeEach(async () => { service = await fixture(); });
+afterEach(async () => { await service?.close(); });
 
 async function browserSession(t) {
   const context = await browser.newContext();
@@ -206,18 +208,81 @@ test('private client registrations are restored with stable credentials and omit
   assert.equal(await disabled.provider.Client.find('external-test-client'), undefined);
 });
 
-test('sign-out clears the local account and the Current provider SSO session', async t => {
+for (const entry of ['account', 'direct', 'redirect']) {
+  test(`${entry} sign-out clears the local account and the Current provider SSO session`, async t => {
+    const { page, context } = await browserSession(t);
+    await googleLogin(page);
+    await page.goto(`${service.origin}/demo/oidc`);
+    await approve(page);
+    const oldCookie = (await context.cookies(service.origin)).find(cookie => cookie.name === 'current-demo');
+    const client = service.clients.find(c => c.client_id === 'current-oidc-demo');
+    if (entry === 'account') await page.getByRole('button', { name: 'Sign out of Current' }).click();
+    else {
+      const params = entry === 'redirect' ? new URLSearchParams({ client_id: client.client_id, post_logout_redirect_uri: `${service.origin}/`, state: 'logout-state' }) : '';
+      await page.goto(`${service.origin}/oauth/logout?${params}`);
+    }
+    await page.getByRole('button', { name: 'Yes, sign me out' }).click();
+    if (entry === 'redirect') await page.waitForURL(`${service.origin}/?state=logout-state`);
+    assert.equal((await (await page.request.get(`${service.origin}/api/session`)).json()).account, null);
+    const replay = await fetch(`${service.origin}/api/session`, { headers: { Cookie: `${oldCookie.name}=${oldCookie.value}` } });
+    assert.equal((await replay.json()).account, null);
+    const params = new URLSearchParams({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], response_type: 'code', scope: 'openid', prompt: 'none' });
+    const response = await page.request.get(`${service.origin}/oauth/authorize?${params}`, { maxRedirects: 0 });
+    assert.equal(new URL(response.headers().location).searchParams.get('error'), 'login_required');
+    await page.goto(`${service.origin}/account`);
+    assert.equal(await page.locator('pre').count(), 0);
+    await page.goto(`${service.origin}/demo/oidc`);
+    assert.equal(await page.getByRole('link', { name: 'Continue with Google' }).count(), 1);
+    assert.equal(await page.locator('button[value="approve"]').count(), 0);
+  });
+}
+
+test('direct sign-out clears an account even before a provider SSO session exists', async t => {
   const { page } = await browserSession(t);
   await googleLogin(page);
-  await page.goto(`${service.origin}/demo/oidc`);
-  await approve(page);
-  await page.getByRole('button', { name: 'Sign out of Current' }).click();
-  await page.getByRole('button', { name: 'Yes, sign me out' }).click();
+  await page.goto(`${service.origin}/oauth/logout`);
+  await page.waitForURL(`${service.origin}/oauth/logout/success`);
   assert.equal((await (await page.request.get(`${service.origin}/api/session`)).json()).account, null);
-  const client = service.clients.find(c => c.client_id === 'current-oidc-demo');
-  const params = new URLSearchParams({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], response_type: 'code', scope: 'openid', prompt: 'none' });
-  const response = await page.request.get(`${service.origin}/oauth/authorize?${params}`, { maxRedirects: 0 });
-  assert.equal(new URL(response.headers().location).searchParams.get('error'), 'login_required');
+});
+
+for (const entry of ['account', 'direct']) {
+  test(`${entry} sign-out keeps the account and SSO session until valid confirmation`, async t => {
+    const { page } = await browserSession(t);
+    await googleLogin(page);
+    await page.goto(`${service.origin}/demo/oidc`);
+    await approve(page);
+    if (entry === 'account') await page.getByRole('button', { name: 'Sign out of Current' }).click();
+    else await page.goto(`${service.origin}/oauth/logout`);
+    assert.ok((await (await page.request.get(`${service.origin}/api/session`)).json()).account);
+    const invalid = await page.request.post(`${service.origin}/oauth/logout/confirm`, { form: { xsrf: 'invalid', logout: 'yes' } });
+    assert.equal(invalid.status(), 400);
+    assert.ok((await (await page.request.get(`${service.origin}/api/session`)).json()).account);
+    await page.getByRole('button', { name: 'No, stay signed in' }).click();
+    assert.ok((await (await page.request.get(`${service.origin}/api/session`)).json()).account);
+    const client = service.clients.find(c => c.client_id === 'current-oidc-demo');
+    const params = new URLSearchParams({ client_id: client.client_id, redirect_uri: client.redirect_uris[0], response_type: 'code', scope: 'openid', prompt: 'none' });
+    const response = await page.request.get(`${service.origin}/oauth/authorize?${params}`, { maxRedirects: 0 });
+    assert.ok(new URL(response.headers().location).searchParams.get('code'));
+  });
+}
+
+test('sign-out rejects pending sign-in callbacks while preserving other browser and relying-party sessions', async t => {
+  const { page } = await browserSession(t);
+  const { page: other } = await browserSession(t);
+  await googleLogin(other);
+  await googleLogin(page);
+  await page.goto(`${service.settings.dimaOrigin}/current-demo/login`);
+  await approve(page);
+  const pending = await page.request.get(`${service.origin}/auth/google`, { maxRedirects: 0 });
+  const upstream = await page.request.get(pending.headers().location, { maxRedirects: 0 });
+  await page.goto(`${service.origin}/oauth/logout`);
+  await page.getByRole('button', { name: 'Yes, sign me out' }).click();
+  const callback = await page.goto(upstream.headers().location);
+  assert.equal(callback.status(), 400);
+  assert.equal((await (await page.request.get(`${service.origin}/api/session`)).json()).account, null);
+  assert.ok((await (await other.request.get(`${service.origin}/api/session`)).json()).account);
+  await page.goto(`${service.settings.dimaOrigin}/current-demo`);
+  assert.equal(JSON.parse(await page.locator('pre').textContent()).type, 'dima');
 });
 
 test('authorization code, independent JWKS verification, refresh rotation, introspection, revocation and replay rejection', async t => {
