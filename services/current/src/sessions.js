@@ -4,7 +4,7 @@ import { Memory, random } from './memory.js';
 
 export function sessions() {
   const store = new Memory();
-  return (req, res, next) => {
+  const middleware = (req, res, next) => {
     const name = req.secure ? '__Host-current-demo' : 'current-demo';
     const key = parseCookie(req.headers.cookie || '')[name];
     let session = key && store.get(key);
@@ -20,6 +20,13 @@ export function sessions() {
     if (!session) req.rotateSession();
     next();
   };
+  const destroy = (req, res) => {
+    const name = req.secure ? '__Host-current-demo' : 'current-demo';
+    const key = parseCookie(req.headers.cookie || '')[name];
+    if (key && store.get(key)?.origin === req.demoOrigin) store.delete(key);
+    res.clearCookie(name, { httpOnly: true, secure: req.secure, sameSite: 'lax', path: '/' });
+  };
+  return { middleware, destroy };
 }
 
 export function csrf(req, res, next) {
